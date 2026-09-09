@@ -5,8 +5,7 @@
 #include <stdlib.h>
 #include <sys/types.h>
 #include <string.h>
-#include <dirent.h>
-#include "utils.h"
+#include "responses.h"
 
 #define MAX_HEADERS 64
 #define FILE_NOT_FOUND "html/404.html"
@@ -21,15 +20,6 @@ typedef struct request
     char body[2048];
 } request;
 
-typedef struct response
-{
-    char version[16];
-    int status_code;
-    char status_message[64];
-    char body[2048];
-    char body_length[16];
-} response;
-
 typedef enum
 {
     METHOD_GET,
@@ -41,6 +31,8 @@ void printRequest(request *req);
 request parse_http_request(char *buffer, ssize_t msglen);
 
 void handle_post_request(response *resp, request *req);
+
+char *read_file(FILE *file, size_t *len);
 
 void handle_get_request(response *resp, request *req);
 

@@ -8,7 +8,7 @@ int send_response(int client_fd, response *resp)
         response_buffer,
         sizeof(response_buffer),
         "%s %d %s\r\n"
-        "Content-Length: %s\r\n"
+        "Content-Length: %zu\r\n"
         "\r\n"
         "%s",
         resp->version,
@@ -30,7 +30,6 @@ int httpServer()
     size_t received = 0;
     struct sockaddr_in addr;
     socklen_t addrlen = sizeof(addr);
-
     if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
     {
         perror("socket failed");
@@ -92,6 +91,7 @@ int httpServer()
         response resp = generate_http_response(&req);
         if (send_response(client_fd, &resp))
         {
+            free(resp.body);
             printf("Response sent \n");
         }
         close(client_fd);

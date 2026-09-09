@@ -3,26 +3,21 @@
 void printRequest(request *req)
 {
     printf("\n========== HTTP REQUEST ==========\n");
-
     printf("Method:  %s\n", req->method);
     printf("Path:    %s\n", req->path);
     printf("Version: %s\n", req->version);
-
     printf("\nHeaders:\n");
     for (int i = 0; i < MAX_HEADERS; i++)
     {
         if (strlen(req->headers[i]) == 0)
             break;
-
         printf("  %s\n", req->headers[i]);
     }
-
     printf("\nBody:\n");
     if (strlen(req->body) > 0)
         printf("  %s\n", req->body);
     else
         printf("  <empty>\n");
-
     printf("==================================\n\n");
 }
 
@@ -44,16 +39,16 @@ request parse_http_request(char *buffer, ssize_t msglen)
         return req;
     if (strstr(line, "HTTP/") != NULL)
     {
-        strcpy(req.method, strtok_r(line, " ", &word_save));
-        strcpy(req.path, strtok_r(NULL, " ", &word_save));
-        strcpy(req.version, strtok_r(NULL, " ", &word_save));
+        snprintf(req.method, sizeof(req.method), "%s", strtok_r(line, " ", &word_save));
+        snprintf(req.path, sizeof(req.path), "%s", strtok_r(NULL, " ", &word_save));
+        snprintf(req.version, sizeof(req.version), "%s", strtok_r(NULL, " ", &word_save));
     }
     for (int i = 0; i < MAX_HEADERS; i++)
     {
         line = strtok_r(NULL, "\r\n", &line_save);
         if (line == NULL || strlen(line) == 0)
             break;
-        strcpy(req.headers[i], line);
+        snprintf(req.headers[i], sizeof(req.headers[i]), "%s", line);
         headers_amount++;
     }
     req.headers_amount = headers_amount;
@@ -67,7 +62,6 @@ char *sanitize_path(char *unsanitizedPath, int len)
     {
         if ((unsanitizedPath[i] == '.' && unsanitizedPath[i + 1] == '/') || (unsanitizedPath[i] == '.' && unsanitizedPath[i + 1] == '.'))
         {
-            printf("Dot detected \n");
             unsanitizedPath[i] = '/';
         }
     }
@@ -76,7 +70,6 @@ char *sanitize_path(char *unsanitizedPath, int len)
 
 char *generate_path(request *req)
 {
-
     if (strcmp(req->path, "/") == 0)
     {
         return strdup("html/index.html");
@@ -94,37 +87,58 @@ char *generate_path(request *req)
     return file_name;
 }
 
+char *read_file(FILE *file, size_t *len)
+{
+    size_t capacity = 1024;
+    size_t length = 0;
+    char *buffer = malloc(capacity);
+    if (buffer == NULL)
+        return NULL;
+    while (1)
+    {
+        size_t n = fread(buffer + length, sizeof(char), capacity - length, file);
+        length += n;
+        if (n == 0)
+            break;
+        if (length == capacity)
+        {
+            capacity *= 2;
+            char *tmp = realloc(buffer, capacity);
+            if (tmp == NULL)
+            {
+                free(buffer);
+                return NULL;
+            }
+            buffer = tmp;
+        }
+    }
+    buffer[length] = '\0';
+    *len = length;
+    return buffer;
+}
+
 void handle_get_request(response *resp, request *req)
 {
-    char buffer[4096];
-    // int content_length = 0;
     char *path = generate_path(req);
     printf("Serving resource : %s\n", path);
-    FILE *file = fopen(path, "r");
+    FILE *file = fopen(path, "rb");
+    free(path);
     if (file == NULL)
     {
-        FILE *notFound = fopen("html/404.html", "r");
+        file = fopen(FILE_NOT_FOUND, "rb");
+        if (file == NULL)
+            internal_server_error(resp);
         perror("Resource not found");
-        while (fgets(buffer, sizeof(resp->body), notFound))
-        {
-            strcat(resp->body, buffer);
-            // content_length += strlen(buffer);
-        }
+        resp->body = read_file(file, &resp->body_length);
         resp->status_code = 404;
         strcpy(resp->status_message, "Not found");
-        snprintf(resp->body_length, sizeof(resp->body_length), "%zu", strlen(resp->body));
-        fclose(notFound);
-        free(path);
+        fclose(file);
         return;
     }
-    while (fgets(buffer, sizeof(resp->body), file))
-    {
-        strcat(resp->body, buffer);
-        // content_length += strlen(buffer);
-    }
-    snprintf(resp->body_length, sizeof(resp->body_length), "%zu", strlen(resp->body));
+    resp->body = read_file(file, &resp->body_length);
+    if (resp->body == NULL)
+        internal_server_error(resp);
     fclose(file);
-    free(path);
     return;
 }
 
@@ -157,7 +171,7 @@ void handle_post_request(response *resp, request *req)
             {
                 int result = parse_query(req);
                 snprintf(resp->body, sizeof(resp->body), "%d", result);
-                snprintf(resp->body_length, sizeof(resp->body_length), "%zu", strlen(resp->body));
+                resp->body_length = strlen(resp->body);
                 break;
             }
         }
