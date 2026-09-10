@@ -1,24 +1,21 @@
 #include "parser.h"
 
-void printRequest(request *req)
+char *content_type_to_str(contentType type)
 {
-    printf("\n========== HTTP REQUEST ==========\n");
-    printf("Method:  %s\n", req->method);
-    printf("Path:    %s\n", req->path);
-    printf("Version: %s\n", req->version);
-    printf("\nHeaders:\n");
-    for (int i = 0; i < MAX_HEADERS; i++)
+    return content_type_strings[type];
+}
+
+contentType content_type_from_string(char *path)
+{
+    char *extension = strrchr(path, '.');
+    for (int i = 0; i < CONTENT_TYPE_AMOUNT; i++)
     {
-        if (strlen(req->headers[i]) == 0)
-            break;
-        printf("  %s\n", req->headers[i]);
+        if ((strcmp(arr_content_type_from_string[i], extension)) == 0)
+        {
+            return i;
+        }
     }
-    printf("\nBody:\n");
-    if (strlen(req->body) > 0)
-        printf("  %s\n", req->body);
-    else
-        printf("  <empty>\n");
-    printf("==================================\n\n");
+    return CONTENT_TYPE_TEXT;
 }
 
 request parse_http_request(char *buffer, ssize_t msglen)
@@ -122,12 +119,14 @@ void handle_get_request(response *resp, request *req)
     char *path = generate_path(req);
     printf("Serving resource : %s\n", path);
     FILE *file = fopen(path, "rb");
-    free(path);
     if (file == NULL)
     {
         file = fopen(FILE_NOT_FOUND, "rb");
         if (file == NULL)
+        {
             internal_server_error(resp);
+            return;
+        }
         perror("Resource not found");
         resp->body = read_file(file, &resp->body_length);
         resp->status_code = 404;
@@ -135,29 +134,38 @@ void handle_get_request(response *resp, request *req)
         fclose(file);
         return;
     }
+    if (!strstr(path, ".html"))
+    {
+        printf("Diff content type.\n");
+        resp->content_type = content_type_from_string(path);
+    }
     resp->body = read_file(file, &resp->body_length);
     if (resp->body == NULL)
         internal_server_error(resp);
+    free(path);
     fclose(file);
     return;
 }
 
-int parse_query(request *req)
+char *parse_query(request *req)
 {
+    char *res_str = malloc(32);
     if (strcmp(req->path, "/add") == 0)
     {
         char *token = strtok(req->body, "&");
         char *firstArg = token;
         char *secondArg = strtok(NULL, "&");
         if (firstArg == NULL || secondArg == NULL)
-            return -1;
+            return NULL;
         char *str_x = strchr(firstArg, '=');
         char *str_y = strchr(secondArg, '=');
         if (str_x == NULL || str_y == NULL)
-            return -1;
+            return NULL;
         int x = atoi(str_x + 1);
         int y = atoi(str_y + 1);
-        return x + y;
+        int res = x + y;
+        snprintf(res_str, 32, "%d", res);
+        return res_str;
     }
 }
 
@@ -169,8 +177,7 @@ void handle_post_request(response *resp, request *req)
         {
             if (strstr(req->headers[i], "x-www-form-urlencoded"))
             {
-                int result = parse_query(req);
-                snprintf(resp->body, sizeof(resp->body), "%d", result);
+                resp->body = parse_query(req);
                 resp->body_length = strlen(resp->body);
                 break;
             }
@@ -211,4 +218,25 @@ response generate_http_response(request *req)
         strcpy(resp.status_message, "Bad Request");
         return resp;
     }
+}
+
+void printRequest(request *req)
+{
+    printf("\n========== HTTP REQUEST ==========\n");
+    printf("Method:  %s\n", req->method);
+    printf("Path:    %s\n", req->path);
+    printf("Version: %s\n", req->version);
+    printf("\nHeaders:\n");
+    for (int i = 0; i < MAX_HEADERS; i++)
+    {
+        if (strlen(req->headers[i]) == 0)
+            break;
+        printf("  %s\n", req->headers[i]);
+    }
+    printf("\nBody:\n");
+    if (strlen(req->body) > 0)
+        printf("  %s\n", req->body);
+    else
+        printf("  <empty>\n");
+    printf("==================================\n\n");
 }

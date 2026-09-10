@@ -2,21 +2,29 @@
 
 int send_response(int client_fd, response *resp)
 {
-    char response_buffer[1024];
-
-    int len = snprintf(
-        response_buffer,
-        sizeof(response_buffer),
+    size_t sent = 0;
+    char headers[2048];
+    int headers_len = snprintf(
+        headers,
+        sizeof(headers),
         "%s %d %s\r\n"
         "Content-Length: %zu\r\n"
-        "\r\n"
-        "%s",
+        "Content-Type: %s\r\n"
+        "\r\n",
         resp->version,
         resp->status_code,
         resp->status_message,
         resp->body_length,
-        resp->body);
-    return send(client_fd, response_buffer, len, 0);
+        content_type_to_str(resp->content_type));
+
+    send(client_fd, headers, headers_len, 0);
+    while (sent < resp->body_length)
+    {
+        ssize_t n = send(client_fd, resp->body + sent, resp->body_length - sent, 0);
+        if (n <= 0)
+            break;
+        sent += n;
+    }
 }
 
 int httpServer()
@@ -84,16 +92,11 @@ int httpServer()
             received += msglen;
             buffer[received] = '\0';
         } while (strstr(buffer, "\r\n\r\n") == NULL);
-        printf("----- RAW REQUEST -----\n");
-        printf("%.*s", (int)received, buffer);
-        printf("\n-----------------------\n");
         req = parse_http_request(buffer, received);
         response resp = generate_http_response(&req);
-        if (send_response(client_fd, &resp))
-        {
-            free(resp.body);
-            printf("Response sent \n");
-        }
+        send_response(client_fd, &resp);
+        free(resp.body);
+        printf("RESPONSE SENT!!!! \n");
         close(client_fd);
     }
     return 0;

@@ -13,6 +13,7 @@
 
 #define PORT 8800
 
+int send_file_response(int client_fd, response *resp);
 int send_response(int client_fd, response *resp);
 int httpServer(void);
 

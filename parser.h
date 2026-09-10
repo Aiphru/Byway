@@ -26,7 +26,9 @@ typedef enum
     METHOD_POST,
 } http_method;
 
-void printRequest(request *req);
+char *content_type_to_str(contentType);
+
+contentType content_type_from_str(char *path);
 
 request parse_http_request(char *buffer, ssize_t msglen);
 
@@ -34,10 +36,14 @@ void handle_post_request(response *resp, request *req);
 
 char *read_file(FILE *file, size_t *len);
 
+unsigned char *read_file_bytes(FILE *file, size_t *len);
+
 void handle_get_request(response *resp, request *req);
 
 response generate_http_response(request *req);
 
-int parse_query(request *req);
+char *parse_query(request *req);
+
+void printRequest(request *req);
 
 #endif
