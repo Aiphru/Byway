@@ -8,6 +8,8 @@ char *content_type_to_str(contentType type)
 contentType content_type_from_string(char *path)
 {
     char *extension = strrchr(path, '.');
+    if (extension == NULL)
+        return CONTENT_TYPE_TEXT;
     for (int i = 0; i < CONTENT_TYPE_AMOUNT; i++)
     {
         if ((strcmp(arr_content_type_from_string[i], extension)) == 0)
@@ -147,11 +149,13 @@ void handle_get_request(response *resp, request *req)
     return;
 }
 
-char *parse_query(request *req)
+char *parse_query(response *resp, request *req)
 {
     char *res_str = malloc(32);
     if (strcmp(req->path, "/add") == 0)
     {
+        if (req->body == NULL)
+            return NULL;
         char *token = strtok(req->body, "&");
         char *firstArg = token;
         char *secondArg = strtok(NULL, "&");
@@ -167,6 +171,10 @@ char *parse_query(request *req)
         snprintf(res_str, 32, "%d", res);
         return res_str;
     }
+    else
+    {
+        return NULL;
+    }
 }
 
 void handle_post_request(response *resp, request *req)
@@ -177,9 +185,10 @@ void handle_post_request(response *resp, request *req)
         {
             if (strstr(req->headers[i], "x-www-form-urlencoded"))
             {
-                resp->body = parse_query(req);
-                resp->body_length = strlen(resp->body);
-                break;
+                resp->body = parse_query(resp, req);
+                if (resp->body != NULL)
+                    resp->body_length = strlen(resp->body);
+                return;
             }
         }
     }
@@ -195,6 +204,7 @@ http_method parse_method(char *method)
     {
         return METHOD_POST;
     }
+    return METHOD_UNKNOWN;
 }
 
 response generate_http_response(request *req)
@@ -212,7 +222,6 @@ response generate_http_response(request *req)
     case METHOD_POST:
         handle_post_request(&resp, req);
         return resp;
-        break;
     default:
         resp.status_code = 400;
         strcpy(resp.status_message, "Bad Request");
